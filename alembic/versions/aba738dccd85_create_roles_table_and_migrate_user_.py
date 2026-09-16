@@ -1,6 +1,6 @@
 from typing import Sequence, Union
 
-from alembic import op
+import alembic.op as op
 import sqlalchemy as sa
 
 
@@ -14,12 +14,12 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
 
     # 1. Create roles table
-    op.create_table(
+    _ = op.create_table(
         "roles",
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column("name", sa.String(length=50), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("name")
+        sa.UniqueConstraint("name"),
     )
 
     # 2. Insert default roles
