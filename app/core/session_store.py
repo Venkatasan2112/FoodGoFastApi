@@ -1,6 +1,5 @@
 from threading import Lock
 
-
 _active_access_tokens: dict[str, str] = {}
 
 _lock = Lock()

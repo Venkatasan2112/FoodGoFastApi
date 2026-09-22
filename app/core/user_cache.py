@@ -3,7 +3,6 @@ from typing import TypedDict, cast
 
 from app.core.redis import redis_client
 
-
 USERS_CACHE_KEY = "users:all"
 USER_CACHE_PREFIX = "users:"
 USERS_CACHE_TTL = 300
@@ -28,7 +27,7 @@ def get_users_from_cache() -> list[UserCacheData] | None:
 
 
 def set_users_cache(users: list[UserCacheData]) -> None:
-    _ = redis_client.set(USERS_CACHE_KEY,json.dumps(users),ex=USERS_CACHE_TTL)
+    _ = redis_client.set(USERS_CACHE_KEY, json.dumps(users), ex=USERS_CACHE_TTL)
 
 
 def delete_users_cache() -> None:
@@ -46,13 +45,9 @@ def get_user_from_cache(user_id: str) -> UserCacheData | None:
 
 def set_user_cache(user: UserCacheData) -> None:
     _ = redis_client.set(
-        f"{USER_CACHE_PREFIX}{user['id']}",
-        json.dumps(user),
-        ex=USERS_CACHE_TTL
+        f"{USER_CACHE_PREFIX}{user['id']}", json.dumps(user), ex=USERS_CACHE_TTL
     )
 
 
 def delete_user_cache(user_id: str) -> None:
-    _ = redis_client.delete(
-        f"{USER_CACHE_PREFIX}{user_id}"
-    )
+    _ = redis_client.delete(f"{USER_CACHE_PREFIX}{user_id}")

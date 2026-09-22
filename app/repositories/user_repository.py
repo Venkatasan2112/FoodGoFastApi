@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models.user import User
-from app.schemas.user import UserCreate, UserProfileUpdate
+from app.schemas.user import UserCreate
 
 
 def get_user_by_email(db: Session, email: str) -> User | None:
@@ -21,7 +21,14 @@ def get_user_by_id(db: Session, user_id: str | UUID) -> User | None:
 
 
 def signup(db: Session, user_data: UserCreate, hashed_password: str) -> User:
-    user = User(name=user_data.name, email=user_data.email, password=hashed_password, phone=user_data.phone,role_id=user_data.role_id, is_active=True)
+    user = User(
+        name=user_data.name,
+        email=user_data.email,
+        password=hashed_password,
+        phone=user_data.phone,
+        role_id=user_data.role_id,
+        is_active=True,
+    )
 
     db.add(user)
 

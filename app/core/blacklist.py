@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 from threading import Lock
 
-
 _blacklisted_tokens: dict[str, float] = {}
 
 _lock = Lock()

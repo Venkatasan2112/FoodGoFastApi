@@ -1,14 +1,19 @@
-from app.core.user_cache import UserCacheData
-from sqlalchemy import UUID
+from uuid import UUID
+
 from sqlalchemy.orm import Session
 
+from app.core.user_cache import (
+    UserCacheData,
+    delete_user_cache,
+    delete_users_cache,
+    get_user_from_cache,
+    get_users_from_cache,
+    set_user_cache,
+    set_users_cache,
+)
+from app.models.user import User
 from app.repositories import user_repository
 from app.schemas.user import UserProfileUpdate
-from app.core.user_cache import get_users_from_cache, set_users_cache, delete_users_cache, get_user_from_cache, set_user_cache, delete_user_cache
-
-from sqlalchemy.orm import Session
-from uuid import UUID
-from app.models.user import User
 
 
 def get_user_profile(db: Session, user_id: str) -> User:
@@ -24,7 +29,7 @@ def get_user_profile(db: Session, user_id: str) -> User:
     return user
 
 
-def update_user(db: Session,user_id: str | UUID,user_data: UserProfileUpdate) -> User:
+def update_user(db: Session, user_id: str | UUID, user_data: UserProfileUpdate) -> User:
 
     user = user_repository.get_user_by_id(db, user_id)
 
@@ -34,19 +39,20 @@ def update_user(db: Session,user_id: str | UUID,user_data: UserProfileUpdate) ->
     if not user.is_active:
         raise ValueError("User account is inactive")
 
-    update_data = user_data.model_dump(exclude_unset=True,exclude_none=True)
+    update_data = user_data.model_dump(exclude_unset=True, exclude_none=True)
 
     if len(update_data) == 0:
         return user
 
-    updated_user = user_repository.update_user(db,user,update_data)
+    updated_user = user_repository.update_user(db, user, update_data)
 
     delete_users_cache()
     delete_user_cache(str(user_id))
 
     return updated_user
 
-def get_user_by_id(db: Session,user_id: str | UUID) -> UserCacheData:
+
+def get_user_by_id(db: Session, user_id: str | UUID) -> UserCacheData:
 
     cached_user = get_user_from_cache(str(user_id))
 
@@ -75,7 +81,7 @@ def get_user_by_id(db: Session,user_id: str | UUID) -> UserCacheData:
     return user_data
 
 
-def delete_user(db: Session,user_id: str | UUID) -> None:
+def delete_user(db: Session, user_id: str | UUID) -> None:
 
     user = user_repository.get_user_by_id(db, user_id)
 
@@ -89,7 +95,6 @@ def delete_user(db: Session,user_id: str | UUID) -> None:
 
     delete_users_cache()
     delete_user_cache(str(user_id))
-
 
 
 def get_all_users(db: Session) -> list[UserCacheData]:
