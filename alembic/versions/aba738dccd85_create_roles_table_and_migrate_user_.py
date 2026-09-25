@@ -1,14 +1,14 @@
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-import alembic.op as op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'aba738dccd85'
-down_revision: Union[str, Sequence[str], None] = '6ad6169597c0'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "aba738dccd85"
+down_revision: str | Sequence[str] | None = "6ad6169597c0"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -31,10 +31,7 @@ def upgrade() -> None:
     """)
 
     # 3. Add role_id temporarily as nullable
-    op.add_column(
-        "users",
-        sa.Column("role_id", sa.UUID(), nullable=True)
-    )
+    op.add_column("users", sa.Column("role_id", sa.UUID(), nullable=True))
 
     # 4. Convert old role values to role_id
     op.execute("""
@@ -45,20 +42,11 @@ def upgrade() -> None:
     """)
 
     # 5. Make role_id required
-    op.alter_column(
-        "users",
-        "role_id",
-        existing_type=sa.UUID(),
-        nullable=False
-    )
+    op.alter_column("users", "role_id", existing_type=sa.UUID(), nullable=False)
 
     # 6. Add foreign key
     op.create_foreign_key(
-        "fk_users_role_id_roles",
-        "users",
-        "roles",
-        ["role_id"],
-        ["id"]
+        "fk_users_role_id_roles", "users", "roles", ["role_id"], ["id"]
     )
 
     # 7. Remove old role column
@@ -68,10 +56,7 @@ def upgrade() -> None:
 def downgrade() -> None:
 
     # 1. Add old role column back
-    op.add_column(
-        "users",
-        sa.Column("role", sa.String(length=100), nullable=True)
-    )
+    op.add_column("users", sa.Column("role", sa.String(length=100), nullable=True))
 
     # 2. Convert role_id back to role
     op.execute("""
@@ -83,18 +68,11 @@ def downgrade() -> None:
 
     # 3. Make old role required
     op.alter_column(
-        "users",
-        "role",
-        existing_type=sa.String(length=100),
-        nullable=False
+        "users", "role", existing_type=sa.String(length=100), nullable=False
     )
 
     # 4. Remove foreign key
-    op.drop_constraint(
-        "fk_users_role_id_roles",
-        "users",
-        type_="foreignkey"
-    )
+    op.drop_constraint("fk_users_role_id_roles", "users", type_="foreignkey")
 
     # 5. Remove role_id
     op.drop_column("users", "role_id")
