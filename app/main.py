@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
-from app.routers import auth, users
+from app.modules.auth import router as auth
+from app.modules.users import router as users
 
 app = FastAPI(title="FoodGo API", version="1.0.0")
 

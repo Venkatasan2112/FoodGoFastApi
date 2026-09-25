@@ -1,23 +1,63 @@
+from typing import cast
+
+from fastapi import Response
 from pwdlib import PasswordHash
 from sqlalchemy.orm import Session
 
-from app.core.auth_utils import blacklist_token, validate_access_token
 from app.core.security import (
     create_access_token,
     create_refresh_token,
     get_claims,
     verify_refresh_token,
 )
-from app.core.session_store import get_active_access_token, set_active_access_token
-from app.models.user import User
-from app.repositories import role_repository, user_repository
-from app.schemas.user import UserCreate
+from app.modules.auth.auth_types import TokenClaims
+from app.modules.auth.session_store import (
+    blacklist_token,
+    get_active_access_token,
+    is_blacklisted,
+    set_active_access_token,
+)
+from app.modules.roles import repository as role_repository
+from app.modules.users import repository as user_repository
+from app.modules.users.model import User
+from app.modules.users.schema import UserCreate
 
 password_hash = PasswordHash.recommended()
 
+REFRESH_COOKIE_NAME = "refresh_token"
+REFRESH_COOKIE_PATH = "/api/auth"
+REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60
+
+
+def set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=REFRESH_COOKIE_MAX_AGE,
+        path=REFRESH_COOKIE_PATH,
+    )
+
+
+def delete_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(key=REFRESH_COOKIE_NAME, path=REFRESH_COOKIE_PATH)
+
+
+def validate_access_token(access_token: str) -> TokenClaims:
+    if is_blacklisted(access_token):
+        raise ValueError("Access token has been revoked")
+
+    claims = get_claims(access_token)
+
+    if claims.get("type") != "access":
+        raise ValueError("Invalid access token")
+
+    return cast(TokenClaims, claims)
+
 
 def signup(db: Session, user_data: UserCreate) -> User:
-
     existing_user = user_repository.get_user_by_email(db, user_data.email)
 
     if existing_user is not None:
@@ -34,7 +74,6 @@ def signup(db: Session, user_data: UserCreate) -> User:
 
 
 def login(db: Session, email: str, password: str) -> tuple[str, str]:
-
     user = user_repository.get_user_by_email(db, email)
 
     if user is None:
@@ -57,10 +96,9 @@ def login(db: Session, email: str, password: str) -> tuple[str, str]:
         old_claims = get_claims(old_access_token)
 
         if old_claims is not None:
-            blacklist_token(old_access_token, old_claims)
+            blacklist_token(old_access_token, cast(TokenClaims, old_claims))
 
     access_token = create_access_token(user_id, role_id)
-
     refresh_token = create_refresh_token(user_id, role_id)
 
     set_active_access_token(user_id, access_token)
@@ -71,9 +109,7 @@ def login(db: Session, email: str, password: str) -> tuple[str, str]:
 def refresh_access_token(
     db: Session, access_token: str, refresh_token: str
 ) -> tuple[str, str]:
-
     access_claims = validate_access_token(access_token)
-
     user_id = verify_refresh_token(refresh_token)
 
     if user_id is None:
@@ -95,7 +131,6 @@ def refresh_access_token(
     blacklist_token(access_token, access_claims)
 
     new_access_token = create_access_token(str(user.id), str(user.role_id))
-
     new_refresh_token = create_refresh_token(str(user.id), str(user.role_id))
 
     set_active_access_token(str(user.id), new_access_token)
@@ -104,7 +139,5 @@ def refresh_access_token(
 
 
 def logout(access_token: str) -> None:
-
     claims = validate_access_token(access_token)
-
     blacklist_token(access_token, claims)

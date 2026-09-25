@@ -3,7 +3,6 @@ from datetime import datetime, timedelta, timezone
 
 from jose import JWTError, jwt
 
-from app.core.auth_types import TokenClaims
 from app.core.config import settings
 
 
@@ -43,7 +42,7 @@ def create_refresh_token(user_id: str, role_id: str) -> str:
     )
 
 
-def get_claims(token: str) -> TokenClaims:
+def get_claims(token: str) -> dict[str, str | float]:
     claims = jwt.decode(
         token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
     )
@@ -56,7 +55,7 @@ def get_claims(token: str) -> TokenClaims:
     }
 
 
-def verify_access_token(token: str) -> TokenClaims | None:
+def verify_access_token(token: str) -> dict[str, str | float] | None:
     try:
         claims = get_claims(token)
         if claims["type"] != "access":
@@ -71,7 +70,7 @@ def verify_refresh_token(token: str) -> str | None:
         claims = get_claims(token)
         if claims["type"] != "refresh":
             return None
-        user_id = claims["sub"]
+        user_id = str(claims["sub"])
         if user_id == "":
             return None
         return user_id

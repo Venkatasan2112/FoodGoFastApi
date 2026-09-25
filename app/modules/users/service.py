@@ -2,7 +2,8 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.core.user_cache import (
+from app.modules.users import repository as user_repository
+from app.modules.users.cache import (
     UserCacheData,
     delete_user_cache,
     delete_users_cache,
@@ -11,9 +12,8 @@ from app.core.user_cache import (
     set_user_cache,
     set_users_cache,
 )
-from app.models.user import User
-from app.repositories import user_repository
-from app.schemas.user import UserProfileUpdate
+from app.modules.users.model import User
+from app.modules.users.schema import UserProfileUpdate
 
 
 def get_user_profile(db: Session, user_id: str) -> User:

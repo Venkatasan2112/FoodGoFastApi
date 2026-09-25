@@ -1,11 +1,8 @@
 from logging.config import fileConfig
 
-import alembic.context as context
-
-import app.models
+from alembic import context
 from app.db.base import Base
 from app.db.session import engine
-
 
 config = context.config
 
