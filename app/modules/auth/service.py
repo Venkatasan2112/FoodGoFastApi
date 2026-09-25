@@ -70,7 +70,14 @@ def signup(db: Session, user_data: UserCreate) -> User:
 
     hashed_password = password_hash.hash(user_data.password)
 
-    return user_repository.signup(db, user_data, hashed_password)
+    try:
+        user = user_repository.signup(db, user_data, hashed_password)
+        db.commit()
+        db.refresh(user)
+        return user
+    except Exception:
+        db.rollback()
+        raise
 
 
 def login(db: Session, email: str, password: str) -> tuple[str, str]:

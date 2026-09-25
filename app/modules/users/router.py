@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.auth.auth_types import TokenClaims
 from app.modules.auth.dependencies import get_current_user, require_admin
+from app.modules.roles import repository as role_repository
 from app.modules.users import service as user_service
 from app.modules.users.cache import UserCacheData
 from app.modules.users.model import User
@@ -36,6 +37,15 @@ def update_user(
     current_user: TokenClaims = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> User:
+
+    if str(user_id) != current_user["sub"]:
+        role_id = UUID(current_user["role_id"])
+        role = role_repository.get_role_by_id(db, role_id)
+        if role is None or role.name != "ADMIN":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to update this user",
+            )
 
     try:
         return user_service.update_user(db, user_id, user_data)

@@ -44,12 +44,18 @@ def update_user(db: Session, user_id: str | UUID, user_data: UserProfileUpdate) 
     if len(update_data) == 0:
         return user
 
-    updated_user = user_repository.update_user(db, user, update_data)
+    try:
+        updated_user = user_repository.update_user(db, user, update_data)
 
-    delete_users_cache()
-    delete_user_cache(str(user_id))
+        delete_users_cache()
+        delete_user_cache(str(user_id))
 
-    return updated_user
+        db.commit()
+        db.refresh(updated_user)
+        return updated_user
+    except Exception:
+        db.rollback()
+        raise
 
 
 def get_user_by_id(db: Session, user_id: str | UUID) -> UserCacheData:
@@ -91,10 +97,16 @@ def delete_user(db: Session, user_id: str | UUID) -> None:
     if not user.is_active:
         raise ValueError("User account is inactive")
 
-    user_repository.delete_user(db, user)
+    try:
+        user_repository.delete_user(db, user)
 
-    delete_users_cache()
-    delete_user_cache(str(user_id))
+        delete_users_cache()
+        delete_user_cache(str(user_id))
+
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 
 def get_all_users(db: Session) -> list[UserCacheData]:

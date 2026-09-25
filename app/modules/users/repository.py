@@ -31,13 +31,7 @@ def signup(db: Session, user_data: UserCreate, hashed_password: str) -> User:
     )
 
     db.add(user)
-
-    try:
-        db.commit()
-        db.refresh(user)
-    except Exception:
-        db.rollback()
-        raise
+    db.flush()
 
     return user
 
@@ -46,23 +40,14 @@ def update_user(db: Session, user: User, update_data: dict[str, object]) -> User
     for field, value in update_data.items():
         setattr(user, field, value)
 
-    try:
-        db.commit()
-        db.refresh(user)
-    except Exception:
-        db.rollback()
-        raise
+    db.flush()
 
     return user
 
 
 def delete_user(db: Session, user: User) -> None:
-    try:
-        db.delete(user)
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
+    db.delete(user)
+    db.flush()
 
 
 def get_all_users(db: Session) -> list[User]:
