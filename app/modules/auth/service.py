@@ -4,6 +4,7 @@ from fastapi import Response
 from pwdlib import PasswordHash
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -34,7 +35,7 @@ def set_refresh_cookie(response: Response, refresh_token: str) -> None:
         key=REFRESH_COOKIE_NAME,
         value=refresh_token,
         httponly=True,
-        secure=False,
+        secure=settings.cookie_secure,
         samesite="lax",
         max_age=REFRESH_COOKIE_MAX_AGE,
         path=REFRESH_COOKIE_PATH,
@@ -42,7 +43,13 @@ def set_refresh_cookie(response: Response, refresh_token: str) -> None:
 
 
 def delete_refresh_cookie(response: Response) -> None:
-    response.delete_cookie(key=REFRESH_COOKIE_NAME, path=REFRESH_COOKIE_PATH)
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+    )
 
 
 def validate_access_token(access_token: str) -> TokenClaims:
