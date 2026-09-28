@@ -16,7 +16,10 @@ from app.modules.auth.session_store import (
     blacklist_token,
     get_active_access_token,
     is_blacklisted,
+    is_refresh_token_active,
+    remove_active_refresh_token,
     set_active_access_token,
+    set_active_refresh_token,
 )
 from app.modules.roles import repository as role_repository
 from app.modules.users import repository as user_repository
@@ -115,6 +118,9 @@ def login(db: Session, email: str, password: str) -> tuple[str, str]:
     access_token = create_access_token(user_id, role_id)
     refresh_token = create_refresh_token(user_id, role_id)
 
+    refresh_claims = get_claims(refresh_token)
+    set_active_refresh_token(str(refresh_claims["jti"]), float(refresh_claims["exp"]))
+
     set_active_access_token(user_id, access_token)
 
     return access_token, refresh_token
@@ -128,6 +134,12 @@ def refresh_access_token(
 
     if user_id is None:
         raise ValueError("Invalid or expired refresh token")
+
+    refresh_claims = get_claims(refresh_token)
+    jti = str(refresh_claims["jti"])
+
+    if not is_refresh_token_active(jti):
+        raise ValueError("Refresh token has been revoked or is not active")
 
     access_user_id = access_claims["sub"]
 
@@ -143,15 +155,31 @@ def refresh_access_token(
         raise ValueError("User account is inactive")
 
     blacklist_token(access_token, access_claims)
+    remove_active_refresh_token(jti)
 
     new_access_token = create_access_token(str(user.id), str(user.role_id))
     new_refresh_token = create_refresh_token(str(user.id), str(user.role_id))
+
+    new_refresh_claims = get_claims(new_refresh_token)
+    set_active_refresh_token(
+        str(new_refresh_claims["jti"]), float(new_refresh_claims["exp"])
+    )
 
     set_active_access_token(str(user.id), new_access_token)
 
     return new_access_token, new_refresh_token
 
 
-def logout(access_token: str) -> None:
+def logout(access_token: str, refresh_token: str | None = None) -> None:
     claims = validate_access_token(access_token)
     blacklist_token(access_token, claims)
+
+    if refresh_token is not None:
+        try:
+            refresh_claims = get_claims(refresh_token)
+            if refresh_claims.get("type") == "refresh":
+                jti = refresh_claims.get("jti")
+                if jti is not None:
+                    remove_active_refresh_token(str(jti))
+        except Exception:  # noqa: BLE001, S110
+            pass

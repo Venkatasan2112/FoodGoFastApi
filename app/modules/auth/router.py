@@ -72,9 +72,10 @@ def refresh(
 @router.post("/logout")
 def logout(request: Request, response: Response) -> LogoutResponse:
     access_token = get_bearer_token(request)
+    refresh_token = request.cookies.get("refresh_token")
 
     try:
-        auth_service.logout(access_token)
+        auth_service.logout(access_token, refresh_token)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
