@@ -1,4 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+
+
+class SignupRequest(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    phone: str | None = None
 
 
 class LoginRequest(BaseModel):

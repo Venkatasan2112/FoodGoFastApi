@@ -12,6 +12,7 @@ from app.core.security import (
     verify_refresh_token,
 )
 from app.modules.auth.auth_types import TokenClaims
+from app.modules.auth.schema import SignupRequest
 from app.modules.auth.session_store import (
     blacklist_token,
     get_active_access_token,
@@ -30,17 +31,17 @@ password_hash = PasswordHash.recommended()
 
 REFRESH_COOKIE_NAME = "refresh_token"
 REFRESH_COOKIE_PATH = "/api/auth"
-REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60
 
 
 def set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    refresh_cookie_max_age = settings.refresh_token_expire_days * 24 * 60 * 60
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
         value=refresh_token,
         httponly=True,
         secure=settings.cookie_secure,
         samesite="lax",
-        max_age=REFRESH_COOKIE_MAX_AGE,
+        max_age=refresh_cookie_max_age,
         path=REFRESH_COOKIE_PATH,
     )
 
@@ -67,21 +68,29 @@ def validate_access_token(access_token: str) -> TokenClaims:
     return cast(TokenClaims, claims)
 
 
-def signup(db: Session, user_data: UserCreate) -> User:
+def signup(db: Session, user_data: SignupRequest) -> User:
     existing_user = user_repository.get_user_by_email(db, user_data.email)
 
     if existing_user is not None:
         raise ValueError("Email already registered")
 
-    role = role_repository.get_role_by_id(db, user_data.role_id)
+    role = role_repository.get_role_by_name(db, "USER")
 
     if role is None:
         raise ValueError("Role not found")
 
     hashed_password = password_hash.hash(user_data.password)
 
+    user_create_data = UserCreate(
+        name=user_data.name,
+        email=user_data.email,
+        password=user_data.password,
+        phone=user_data.phone,
+        role_id=role.id,
+    )
+
     try:
-        user = user_repository.signup(db, user_data, hashed_password)
+        user = user_repository.signup(db, user_create_data, hashed_password)
         db.commit()
         db.refresh(user)
         return user

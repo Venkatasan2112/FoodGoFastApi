@@ -9,9 +9,9 @@ from app.modules.auth.dependencies import (
     get_bearer_token,
     get_refresh_token,
 )
-from app.modules.auth.schema import LoginRequest, LoginResponse
+from app.modules.auth.schema import LoginRequest, LoginResponse, SignupRequest
 from app.modules.users.model import User
-from app.modules.users.schema import UserCreate, UserResponse
+from app.modules.users.schema import UserResponse
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -23,7 +23,7 @@ class LogoutResponse(TypedDict):
 @router.post(
     "/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
-def signup(user_data: UserCreate, db: Session = Depends(get_db)) -> User:  # noqa: B008
+def signup(user_data: SignupRequest, db: Session = Depends(get_db)) -> User:  # noqa: B008
     try:
         return auth_service.signup(db, user_data)
     except ValueError as e:
