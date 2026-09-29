@@ -1,5 +1,3 @@
-from typing import TypedDict
-
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
@@ -19,10 +17,6 @@ from app.modules.auth.schema import (
 )
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
-
-
-class LogoutResponse(TypedDict):
-    message: str
 
 
 @router.post(
@@ -70,8 +64,8 @@ def refresh(
     return LoginResponse(access_token=new_access_token, token_type="bearer")
 
 
-@router.post("/logout")
-def logout(request: Request, response: Response) -> LogoutResponse:
+@router.post("/logout", response_model=MessageResponse)
+def logout(request: Request, response: Response) -> MessageResponse:
     access_token = get_bearer_token(request)
     refresh_token = request.cookies.get("refresh_token")
 
@@ -79,4 +73,4 @@ def logout(request: Request, response: Response) -> LogoutResponse:
 
     auth_service.delete_refresh_cookie(response)
 
-    return {"message": "Logout successful"}
+    return MessageResponse(message="Logout successful")
