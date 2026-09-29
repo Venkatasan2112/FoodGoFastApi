@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.auth.auth_types import TokenClaims
 from app.modules.auth.dependencies import get_current_user, require_admin
+from app.modules.auth.schema import MessageResponse
 from app.modules.roles import repository as role_repository
 from app.modules.users import service as user_service
 from app.modules.users.cache import UserCacheData
@@ -30,13 +31,13 @@ def get_user_profile(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-@router.put("/update-user/{user_id}", response_model=UserResponse)
+@router.put("/update-user/{user_id}", response_model=MessageResponse)
 def update_user(
     user_data: UserProfileUpdate,
     user_id: UUID,
     current_user: TokenClaims = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
-) -> User:
+) -> MessageResponse:
 
     if str(user_id) != current_user["sub"]:
         role_id = UUID(current_user["role_id"])
@@ -48,7 +49,8 @@ def update_user(
             )
 
     try:
-        return user_service.update_user(db, user_id, user_data)
+        _ = user_service.update_user(db, user_id, user_data)
+        return MessageResponse(message="User updated successfully")
 
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
