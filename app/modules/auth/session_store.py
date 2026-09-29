@@ -2,9 +2,9 @@ import logging
 from datetime import datetime, timezone
 
 import redis
-from fastapi import HTTPException, status
 from jose import JWTError, jwt
 
+from app.core.exceptions import ServiceUnavailableException
 from app.core.redis import redis_client
 from app.modules.auth.auth_types import TokenClaims
 
@@ -56,9 +56,8 @@ def is_blacklisted(token: str) -> bool:
         return bool(redis_client.exists(f"auth:blacklist:{jti}"))
     except redis.RedisError as e:
         logger.error(f"Redis error during blacklist check: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service temporarily unavailable",
+        raise ServiceUnavailableException(
+            "Authentication service temporarily unavailable"
         )
 
 
@@ -76,9 +75,8 @@ def blacklist_token(token: str, claims: TokenClaims) -> None:
             _ = redis_client.setex(f"auth:blacklist:{jti}", ttl, "1")
         except redis.RedisError as e:
             logger.error(f"Failed to blacklist token in Redis: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Authentication service temporarily unavailable",
+            raise ServiceUnavailableException(
+                "Authentication service temporarily unavailable"
             )
 
 
@@ -90,9 +88,8 @@ def set_active_refresh_token(jti: str, expiry: float) -> None:
             _ = redis_client.setex(f"auth:refresh:{jti}", ttl, "1")
         except redis.RedisError as e:
             logger.error(f"Failed to set active refresh token in Redis: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Authentication service temporarily unavailable",
+            raise ServiceUnavailableException(
+                "Authentication service temporarily unavailable"
             )
 
 
@@ -101,9 +98,8 @@ def is_refresh_token_active(jti: str) -> bool:
         return bool(redis_client.exists(f"auth:refresh:{jti}"))
     except redis.RedisError as e:
         logger.error(f"Redis error during refresh token check: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service temporarily unavailable",
+        raise ServiceUnavailableException(
+            "Authentication service temporarily unavailable"
         )
 
 
@@ -112,7 +108,6 @@ def remove_active_refresh_token(jti: str) -> None:
         _ = redis_client.delete(f"auth:refresh:{jti}")
     except redis.RedisError as e:
         logger.error(f"Failed to remove active refresh token from Redis: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service temporarily unavailable",
+        raise ServiceUnavailableException(
+            "Authentication service temporarily unavailable"
         )

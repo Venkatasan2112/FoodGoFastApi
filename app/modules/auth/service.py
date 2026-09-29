@@ -1,10 +1,17 @@
 from typing import cast
+from uuid import UUID
 
 from fastapi import Response
 from pwdlib import PasswordHash
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.exceptions import (
+    AuthenticationException,
+    AuthorizationException,
+    ConflictException,
+    NotFoundException,
+)
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -58,26 +65,45 @@ def delete_refresh_cookie(response: Response) -> None:
 
 def validate_access_token(access_token: str) -> TokenClaims:
     if is_blacklisted(access_token):
-        raise ValueError("Access token has been revoked")
+        raise AuthenticationException("Access token has been revoked")
 
     claims = get_claims(access_token)
 
     if claims.get("type") != "access":
-        raise ValueError("Invalid access token")
+        raise AuthenticationException("Invalid access token")
 
     return cast(TokenClaims, claims)
 
 
-def signup(db: Session, user_data: SignupRequest) -> User:
+def signup(
+    db: Session, user_data: SignupRequest, current_user: TokenClaims | None = None
+) -> User:
     existing_user = user_repository.get_user_by_email(db, user_data.email)
 
     if existing_user is not None:
-        raise ValueError("Email already registered")
+        raise ConflictException("Email already registered")
 
-    role = role_repository.get_role_by_name(db, "USER")
+    if user_data.role_id is None:
+        role = role_repository.get_role_by_name(db, "USER")
+        if role is None:
+            raise NotFoundException("Role not found")
+        role_id = role.id
+    else:
+        requested_role = role_repository.get_role_by_id(db, user_data.role_id)
+        if requested_role is None:
+            raise NotFoundException("Requested role not found")
 
-    if role is None:
-        raise ValueError("Role not found")
+        role_id = requested_role.id
+
+        if requested_role.name != "ADMIN":
+            if current_user is None:
+                raise AuthorizationException("Role assignment requires admin access")
+
+            caller_role_id = UUID(current_user["role_id"])
+            caller_role = role_repository.get_role_by_id(db, caller_role_id)
+
+            if caller_role is None or caller_role.name not in ["ADMIN", "SUPER_ADMIN"]:
+                raise AuthorizationException("Role assignment requires admin access")
 
     hashed_password = password_hash.hash(user_data.password)
 
@@ -86,7 +112,7 @@ def signup(db: Session, user_data: SignupRequest) -> User:
         email=user_data.email,
         password=user_data.password,
         phone=user_data.phone,
-        role_id=role.id,
+        role_id=role_id,
     )
 
     try:
@@ -103,15 +129,15 @@ def login(db: Session, email: str, password: str) -> tuple[str, str]:
     user = user_repository.get_user_by_email(db, email)
 
     if user is None:
-        raise ValueError("Invalid email or password")
+        raise AuthenticationException("Invalid email or password")
 
     password_valid = password_hash.verify(password, user.password)
 
     if not password_valid:
-        raise ValueError("Invalid email or password")
+        raise AuthenticationException("Invalid email or password")
 
     if not user.is_active:
-        raise ValueError("User account is inactive")
+        raise AuthenticationException("User account is inactive")
 
     user_id = str(user.id)
     role_id = str(user.role_id)
@@ -142,26 +168,26 @@ def refresh_access_token(
     user_id = verify_refresh_token(refresh_token)
 
     if user_id is None:
-        raise ValueError("Invalid or expired refresh token")
+        raise AuthenticationException("Invalid or expired refresh token")
 
     refresh_claims = get_claims(refresh_token)
     jti = str(refresh_claims["jti"])
 
     if not is_refresh_token_active(jti):
-        raise ValueError("Refresh token has been revoked or is not active")
+        raise AuthenticationException("Refresh token has been revoked or is not active")
 
     access_user_id = access_claims["sub"]
 
     if access_user_id != user_id:
-        raise ValueError("Token user mismatch")
+        raise AuthenticationException("Token user mismatch")
 
     user = user_repository.get_user_by_id(db, user_id)
 
     if user is None:
-        raise ValueError("User not found")
+        raise NotFoundException("User not found")
 
     if not user.is_active:
-        raise ValueError("User account is inactive")
+        raise AuthenticationException("User account is inactive")
 
     blacklist_token(access_token, access_claims)
     remove_active_refresh_token(jti)

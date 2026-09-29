@@ -11,9 +11,20 @@ class UserCreate(BaseModel):
     role_id: UUID
 
 
-class UserProfileUpdate(BaseModel):
-    name: str
+class UpdateUserRequest(BaseModel):
+    name: str | None = None
     phone: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class UserProfileResponse(BaseModel):
+    id: UUID
+    name: str
+    email: EmailStr
+    phone: str | None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserResponse(BaseModel):
