@@ -90,6 +90,10 @@ def set_active_refresh_token(jti: str, expiry: float) -> None:
             _ = redis_client.setex(f"auth:refresh:{jti}", ttl, "1")
         except redis.RedisError as e:
             logger.error(f"Failed to set active refresh token in Redis: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Authentication service temporarily unavailable",
+            )
 
 
 def is_refresh_token_active(jti: str) -> bool:
@@ -108,3 +112,7 @@ def remove_active_refresh_token(jti: str) -> None:
         _ = redis_client.delete(f"auth:refresh:{jti}")
     except redis.RedisError as e:
         logger.error(f"Failed to remove active refresh token from Redis: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service temporarily unavailable",
+        )

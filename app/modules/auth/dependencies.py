@@ -76,7 +76,7 @@ def require_admin(
             status_code=status.HTTP_403_FORBIDDEN, detail="Role not found"
         )
 
-    if role.name != "ADMIN":
+    if role.name not in ["ADMIN", "SUPER_ADMIN"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
         )

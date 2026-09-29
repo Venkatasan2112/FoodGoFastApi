@@ -57,7 +57,7 @@ def update_user(
 @router.get("/get-user-by-id/{user_id}", response_model=UserResponse)
 def get_user_by_id(
     user_id: UUID,
-    current_user: TokenClaims = Depends(get_current_user),  # noqa: B008
+    current_user: TokenClaims = Depends(require_admin),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> UserCacheData:
 
