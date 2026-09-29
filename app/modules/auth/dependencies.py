@@ -63,6 +63,13 @@ def get_current_user(request: Request) -> TokenClaims:
     return cast(TokenClaims, claims)
 
 
+def get_optional_current_user(request: Request) -> TokenClaims | None:
+    try:
+        return get_current_user(request)
+    except HTTPException:
+        return None
+
+
 def require_admin(
     current_user: TokenClaims = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008

@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import AuthenticationException, NotFoundException
 from app.modules.users import repository as user_repository
 from app.modules.users.cache import (
     UserCacheData,
@@ -13,7 +14,7 @@ from app.modules.users.cache import (
     set_users_cache,
 )
 from app.modules.users.model import User
-from app.modules.users.schema import UserProfileUpdate
+from app.modules.users.schema import UpdateUserRequest
 
 
 def get_user_profile(db: Session, user_id: str) -> User:
@@ -21,23 +22,23 @@ def get_user_profile(db: Session, user_id: str) -> User:
     user = user_repository.get_user_by_id(db, user_id)
 
     if user is None:
-        raise ValueError("User not found")
+        raise NotFoundException("User not found")
 
     if not user.is_active:
-        raise ValueError("User account is inactive")
+        raise AuthenticationException("User account is inactive")
 
     return user
 
 
-def update_user(db: Session, user_id: str | UUID, user_data: UserProfileUpdate) -> User:
+def update_user(db: Session, user_id: str | UUID, user_data: UpdateUserRequest) -> User:
 
     user = user_repository.get_user_by_id(db, user_id)
 
     if user is None:
-        raise ValueError("User not found")
+        raise NotFoundException("User not found")
 
     if not user.is_active:
-        raise ValueError("User account is inactive")
+        raise AuthenticationException("User account is inactive")
 
     update_data = user_data.model_dump(exclude_unset=True, exclude_none=True)
 
@@ -68,10 +69,10 @@ def get_user_by_id(db: Session, user_id: str | UUID) -> UserCacheData:
     user = user_repository.get_user_by_id(db, user_id)
 
     if user is None:
-        raise ValueError("User not found")
+        raise NotFoundException("User not found")
 
     if not user.is_active:
-        raise ValueError("User account is inactive")
+        raise AuthenticationException("User account is inactive")
 
     user_data: UserCacheData = {
         "id": str(user.id),
@@ -92,10 +93,10 @@ def delete_user(db: Session, user_id: str | UUID) -> None:
     user = user_repository.get_user_by_id(db, user_id)
 
     if user is None:
-        raise ValueError("User not found")
+        raise NotFoundException("User not found")
 
     if not user.is_active:
-        raise ValueError("User account is inactive")
+        raise AuthenticationException("User account is inactive")
 
     try:
         user_repository.delete_user(db, user)

@@ -1,18 +1,20 @@
 from typing import TypedDict
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
+from app.core.schemas import MessageResponse
 from app.db.session import get_db
 from app.modules.auth import service as auth_service
+from app.modules.auth.auth_types import TokenClaims
 from app.modules.auth.dependencies import (
     get_bearer_token,
+    get_optional_current_user,
     get_refresh_token,
 )
 from app.modules.auth.schema import (
     LoginRequest,
     LoginResponse,
-    MessageResponse,
     SignupRequest,
 )
 
@@ -26,12 +28,13 @@ class LogoutResponse(TypedDict):
 @router.post(
     "/signup", response_model=MessageResponse, status_code=status.HTTP_201_CREATED
 )
-def signup(user_data: SignupRequest, db: Session = Depends(get_db)) -> MessageResponse:  # noqa: B008
-    try:
-        _ = auth_service.signup(db, user_data)
-        return MessageResponse(message="User created successfully")
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+def signup(
+    user_data: SignupRequest,
+    current_user: TokenClaims | None = Depends(get_optional_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> MessageResponse:
+    _ = auth_service.signup(db, user_data, current_user)
+    return MessageResponse(message="User created successfully")
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -40,12 +43,9 @@ def login(
     response: Response,
     db: Session = Depends(get_db),  # noqa: B008
 ) -> LoginResponse:
-    try:
-        access_token, refresh_token = auth_service.login(
-            db, login_data.email, login_data.password
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    access_token, refresh_token = auth_service.login(
+        db, login_data.email, login_data.password
+    )
 
     auth_service.set_refresh_cookie(response, refresh_token)
 
@@ -61,12 +61,9 @@ def refresh(
     access_token = get_bearer_token(request)
     refresh_token = get_refresh_token(request)
 
-    try:
-        new_access_token, new_refresh_token = auth_service.refresh_access_token(
-            db, access_token, refresh_token
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    new_access_token, new_refresh_token = auth_service.refresh_access_token(
+        db, access_token, refresh_token
+    )
 
     auth_service.set_refresh_cookie(response, new_refresh_token)
 
@@ -78,10 +75,7 @@ def logout(request: Request, response: Response) -> LogoutResponse:
     access_token = get_bearer_token(request)
     refresh_token = request.cookies.get("refresh_token")
 
-    try:
-        auth_service.logout(access_token, refresh_token)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    auth_service.logout(access_token, refresh_token)
 
     auth_service.delete_refresh_cookie(response)
 
