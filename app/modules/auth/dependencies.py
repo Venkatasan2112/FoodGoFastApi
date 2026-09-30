@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 from app.core.security import verify_access_token
 from app.db.session import get_db
 from app.modules.auth.auth_types import TokenClaims
+from app.modules.auth.cookie import REFRESH_COOKIE_NAME
 from app.modules.auth.session_store import is_blacklisted
 from app.modules.roles import repository as role_repository
 
-REFRESH_COOKIE_NAME = "refresh_token"
+ADMIN_ROLES = frozenset({"ADMIN", "SUPER_ADMIN"})
 
 
 def get_bearer_token(request: Request) -> str:
@@ -44,6 +45,10 @@ def get_refresh_token(request: Request) -> str:
     return refresh_token
 
 
+def get_optional_refresh_token(request: Request) -> str | None:
+    return request.cookies.get(REFRESH_COOKIE_NAME)
+
+
 def get_current_user(request: Request) -> TokenClaims:
     token = get_bearer_token(request)
 
@@ -64,17 +69,30 @@ def get_current_user(request: Request) -> TokenClaims:
 
 
 def get_optional_current_user(request: Request) -> TokenClaims | None:
-    try:
-        return get_current_user(request)
-    except HTTPException:
+    auth_header = request.headers.get("Authorization")
+    if auth_header is None or auth_header == "":
         return None
+
+    return get_current_user(request)
 
 
 def require_admin(
     current_user: TokenClaims = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> TokenClaims:
-    role_id = UUID(current_user["role_id"])
+    role_id_str = current_user.get("role_id")
+
+    if role_id_str is None or role_id_str == "":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Role information missing"
+        )
+
+    try:
+        role_id = UUID(role_id_str)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid role ID format"
+        ) from None
 
     role = role_repository.get_role_by_id(db, role_id)
 
@@ -83,7 +101,7 @@ def require_admin(
             status_code=status.HTTP_403_FORBIDDEN, detail="Role not found"
         )
 
-    if role.name not in ["ADMIN", "SUPER_ADMIN"]:
+    if role.name not in ADMIN_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
         )

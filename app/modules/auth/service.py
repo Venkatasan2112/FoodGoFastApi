@@ -1,109 +1,35 @@
-from typing import cast
-from uuid import UUID
-
-from fastapi import Response
 from pwdlib import PasswordHash
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.exceptions import (
     AuthenticationException,
-    AuthorizationException,
     ConflictException,
     NotFoundException,
 )
-from app.core.security import (
-    create_access_token,
-    create_refresh_token,
-    get_claims,
-    verify_refresh_token,
-)
+from app.core.security import verify_refresh_token
+from app.modules.auth import authorization, token_service
 from app.modules.auth.auth_types import TokenClaims
 from app.modules.auth.schema import SignupRequest
 from app.modules.auth.session_store import (
     blacklist_token,
-    get_active_access_token,
-    is_blacklisted,
     is_refresh_token_active,
     remove_active_refresh_token,
-    set_active_access_token,
-    set_active_refresh_token,
 )
-from app.modules.roles import repository as role_repository
 from app.modules.users import repository as user_repository
-from app.modules.users.model import User
 from app.modules.users.schema import UserCreate
 
 password_hash = PasswordHash.recommended()
 
-REFRESH_COOKIE_NAME = "refresh_token"
-REFRESH_COOKIE_PATH = "/api/auth"
-
-
-def set_refresh_cookie(response: Response, refresh_token: str) -> None:
-    refresh_cookie_max_age = settings.refresh_token_expire_days * 24 * 60 * 60
-    response.set_cookie(
-        key=REFRESH_COOKIE_NAME,
-        value=refresh_token,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite="lax",
-        max_age=refresh_cookie_max_age,
-        path=REFRESH_COOKIE_PATH,
-    )
-
-
-def delete_refresh_cookie(response: Response) -> None:
-    response.delete_cookie(
-        key=REFRESH_COOKIE_NAME,
-        path=REFRESH_COOKIE_PATH,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite="lax",
-    )
-
-
-def validate_access_token(access_token: str) -> TokenClaims:
-    if is_blacklisted(access_token):
-        raise AuthenticationException("Access token has been revoked")
-
-    claims = get_claims(access_token)
-
-    if claims.get("type") != "access":
-        raise AuthenticationException("Invalid access token")
-
-    return cast(TokenClaims, claims)
-
 
 def signup(
     db: Session, user_data: SignupRequest, current_user: TokenClaims | None = None
-) -> User:
+) -> None:
     existing_user = user_repository.get_user_by_email(db, user_data.email)
 
     if existing_user is not None:
         raise ConflictException("Email already registered")
 
-    if user_data.role_id is None:
-        role = role_repository.get_role_by_name(db, "USER")
-        if role is None:
-            raise NotFoundException("Role not found")
-        role_id = role.id
-    else:
-        requested_role = role_repository.get_role_by_id(db, user_data.role_id)
-        if requested_role is None:
-            raise NotFoundException("Requested role not found")
-
-        role_id = requested_role.id
-
-        if requested_role.name != "ADMIN":
-            if current_user is None:
-                raise AuthorizationException("Role assignment requires admin access")
-
-            caller_role_id = UUID(current_user["role_id"])
-            caller_role = role_repository.get_role_by_id(db, caller_role_id)
-
-            if caller_role is None or caller_role.name not in ["ADMIN", "SUPER_ADMIN"]:
-                raise AuthorizationException("Role assignment requires admin access")
+    role_id = authorization.resolve_signup_role(db, user_data.role_id, current_user)
 
     hashed_password = password_hash.hash(user_data.password)
 
@@ -116,10 +42,8 @@ def signup(
     )
 
     try:
-        user = user_repository.signup(db, user_create_data, hashed_password)
+        _ = user_repository.signup(db, user_create_data, hashed_password)
         db.commit()
-        db.refresh(user)
-        return user
     except Exception:
         db.rollback()
         raise
@@ -142,36 +66,22 @@ def login(db: Session, email: str, password: str) -> tuple[str, str]:
     user_id = str(user.id)
     role_id = str(user.role_id)
 
-    old_access_token = get_active_access_token(user_id)
+    token_service.revoke_old_access_token(user_id)
 
-    if old_access_token is not None:
-        old_claims = get_claims(old_access_token)
-
-        if old_claims is not None:
-            blacklist_token(old_access_token, cast(TokenClaims, old_claims))
-
-    access_token = create_access_token(user_id, role_id)
-    refresh_token = create_refresh_token(user_id, role_id)
-
-    refresh_claims = get_claims(refresh_token)
-    set_active_refresh_token(str(refresh_claims["jti"]), float(refresh_claims["exp"]))
-
-    set_active_access_token(user_id, access_token)
-
-    return access_token, refresh_token
+    return token_service.issue_tokens(user_id, role_id)
 
 
 def refresh_access_token(
     db: Session, access_token: str, refresh_token: str
 ) -> tuple[str, str]:
-    access_claims = validate_access_token(access_token)
-    user_id = verify_refresh_token(refresh_token)
+    access_claims = token_service.validate_access_token(access_token)
 
-    if user_id is None:
+    refresh_claims = verify_refresh_token(refresh_token)
+    if refresh_claims is None:
         raise AuthenticationException("Invalid or expired refresh token")
 
-    refresh_claims = get_claims(refresh_token)
     jti = str(refresh_claims["jti"])
+    user_id = str(refresh_claims["sub"])
 
     if not is_refresh_token_active(jti):
         raise AuthenticationException("Refresh token has been revoked or is not active")
@@ -192,29 +102,12 @@ def refresh_access_token(
     blacklist_token(access_token, access_claims)
     remove_active_refresh_token(jti)
 
-    new_access_token = create_access_token(str(user.id), str(user.role_id))
-    new_refresh_token = create_refresh_token(str(user.id), str(user.role_id))
-
-    new_refresh_claims = get_claims(new_refresh_token)
-    set_active_refresh_token(
-        str(new_refresh_claims["jti"]), float(new_refresh_claims["exp"])
-    )
-
-    set_active_access_token(str(user.id), new_access_token)
-
-    return new_access_token, new_refresh_token
+    return token_service.issue_tokens(str(user.id), str(user.role_id))
 
 
 def logout(access_token: str, refresh_token: str | None = None) -> None:
-    claims = validate_access_token(access_token)
+    claims = token_service.validate_access_token(access_token)
     blacklist_token(access_token, claims)
 
     if refresh_token is not None:
-        try:
-            refresh_claims = get_claims(refresh_token)
-            if refresh_claims.get("type") == "refresh":
-                jti = refresh_claims.get("jti")
-                if jti is not None:
-                    remove_active_refresh_token(str(jti))
-        except Exception:  # noqa: BLE001, S110
-            pass
+        token_service.revoke_refresh_session(refresh_token)

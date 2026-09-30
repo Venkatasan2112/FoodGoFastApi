@@ -65,7 +65,7 @@ def verify_access_token(token: str) -> dict[str, str | float] | None:
         return None
 
 
-def verify_refresh_token(token: str) -> str | None:
+def verify_refresh_token(token: str) -> dict[str, str | float] | None:
     try:
         claims = get_claims(token)
         if claims["type"] != "refresh":
@@ -73,6 +73,6 @@ def verify_refresh_token(token: str) -> str | None:
         user_id = str(claims["sub"])
         if user_id == "":
             return None
-        return user_id
+        return claims
     except JWTError:
         return None
