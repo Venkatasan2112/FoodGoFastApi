@@ -107,3 +107,36 @@ def require_admin(
         )
 
     return current_user
+
+
+def require_self_or_admin(
+    user_id: UUID,
+    current_user: TokenClaims = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> TokenClaims:
+    if str(user_id) == current_user["sub"]:
+        return current_user
+
+    role_id_str = current_user.get("role_id")
+
+    if role_id_str is None or role_id_str == "":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Role information missing"
+        )
+
+    try:
+        role_id = UUID(role_id_str)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid role ID format"
+        ) from None
+
+    role = role_repository.get_role_by_id(db, role_id)
+
+    if role is None or role.name != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this user",
+        )
+
+    return current_user

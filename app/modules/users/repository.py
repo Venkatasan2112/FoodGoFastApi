@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.users.model import User
@@ -7,7 +8,7 @@ from app.modules.users.schema import UserCreate
 
 
 def get_user_by_email(db: Session, email: str) -> User | None:
-    return db.query(User).filter(User.email == email).first()
+    return db.scalars(select(User).where(User.email == email)).first()
 
 
 def get_user_by_id(db: Session, user_id: str | UUID) -> User | None:
@@ -17,7 +18,7 @@ def get_user_by_id(db: Session, user_id: str | UUID) -> User | None:
         except ValueError:
             return None
 
-    return db.query(User).filter(User.id == user_id).first()
+    return db.get(User, user_id)
 
 
 def signup(db: Session, user_data: UserCreate, hashed_password: str) -> User:
@@ -51,4 +52,4 @@ def delete_user(db: Session, user: User) -> None:
 
 
 def get_all_users(db: Session) -> list[User]:
-    return db.query(User).all()
+    return list(db.scalars(select(User)).all())

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 USERS_CACHE_KEY = "users:all"
 USER_CACHE_PREFIX = "users:"
-USERS_CACHE_TTL = 300
+CACHE_TTL = 300
 
 
 class UserCacheData(TypedDict):
@@ -20,6 +20,10 @@ class UserCacheData(TypedDict):
     phone: str | None
     role_id: str
     is_active: bool
+
+
+def _user_cache_key(user_id: str) -> str:
+    return f"{USER_CACHE_PREFIX}{user_id}"
 
 
 def get_users_from_cache() -> list[UserCacheData] | None:
@@ -32,12 +36,16 @@ def get_users_from_cache() -> list[UserCacheData] | None:
     if data is None:
         return None
 
-    return cast(list[UserCacheData], json.loads(data))
+    try:
+        return cast(list[UserCacheData], json.loads(data))
+    except (json.JSONDecodeError, TypeError) as exc:
+        logger.warning("Malformed JSON in users cache: %s", exc)
+        return None
 
 
 def set_users_cache(users: list[UserCacheData]) -> None:
     try:
-        _ = redis_client.set(USERS_CACHE_KEY, json.dumps(users), ex=USERS_CACHE_TTL)
+        _ = redis_client.set(USERS_CACHE_KEY, json.dumps(users), ex=CACHE_TTL)
     except RedisError as exc:
         logger.warning("Redis unavailable while writing cache: %s", exc)
 
@@ -51,28 +59,37 @@ def delete_users_cache() -> None:
 
 def get_user_from_cache(user_id: str) -> UserCacheData | None:
     try:
-        data = redis_client.get(f"{USER_CACHE_PREFIX}{user_id}")
+        data = redis_client.get(_user_cache_key(user_id))
     except RedisError as exc:
-        logger.warning("Redis unavailable while reading cache: %s", exc)
+        logger.warning(
+            "Redis unavailable while reading cache for user %s: %s", user_id, exc
+        )
         return None
 
     if data is None:
         return None
 
-    return cast(UserCacheData, json.loads(data))
+    try:
+        return cast(UserCacheData, json.loads(data))
+    except (json.JSONDecodeError, TypeError) as exc:
+        logger.warning("Malformed JSON in cache for user %s: %s", user_id, exc)
+        return None
 
 
 def set_user_cache(user: UserCacheData) -> None:
+    user_id = user["id"]
     try:
-        _ = redis_client.set(
-            f"{USER_CACHE_PREFIX}{user['id']}", json.dumps(user), ex=USERS_CACHE_TTL
-        )
+        _ = redis_client.set(_user_cache_key(user_id), json.dumps(user), ex=CACHE_TTL)
     except RedisError as exc:
-        logger.warning("Redis unavailable while writing cache: %s", exc)
+        logger.warning(
+            "Redis unavailable while writing cache for user %s: %s", user_id, exc
+        )
 
 
 def delete_user_cache(user_id: str) -> None:
     try:
-        _ = redis_client.delete(f"{USER_CACHE_PREFIX}{user_id}")
+        _ = redis_client.delete(_user_cache_key(user_id))
     except RedisError as exc:
-        logger.warning("Redis unavailable while deleting cache: %s", exc)
+        logger.warning(
+            "Redis unavailable while deleting cache for user %s: %s", user_id, exc
+        )
