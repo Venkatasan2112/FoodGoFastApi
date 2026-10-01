@@ -1,14 +1,16 @@
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class SignupRequest(BaseModel):
     name: str
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8, max_length=128)
     phone: str | None = None
     role_id: UUID | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class LoginRequest(BaseModel):

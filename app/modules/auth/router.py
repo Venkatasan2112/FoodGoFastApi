@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import login_rate_limit, signup_rate_limit
 from app.core.schemas import MessageResponse
 from app.db.session import get_db
 from app.modules.auth import cookie
@@ -30,7 +31,10 @@ OptionalCurrentUser = Annotated[TokenClaims | None, Depends(get_optional_current
 
 
 @router.post(
-    "/signup", response_model=MessageResponse, status_code=status.HTTP_201_CREATED
+    "/signup",
+    response_model=MessageResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(signup_rate_limit)],
 )
 def signup(
     user_data: SignupRequest,
@@ -41,7 +45,11 @@ def signup(
     return MessageResponse(message="User created successfully")
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post(
+    "/login",
+    response_model=LoginResponse,
+    dependencies=[Depends(login_rate_limit)],
+)
 def login(
     login_data: LoginRequest,
     response: Response,

@@ -4,14 +4,13 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import AuthorizationException
 from app.core.security import verify_access_token
 from app.db.session import get_db
+from app.modules.auth import authorization
 from app.modules.auth.auth_types import TokenClaims
 from app.modules.auth.cookie import REFRESH_COOKIE_NAME
 from app.modules.auth.session_store import is_blacklisted
-from app.modules.roles import repository as role_repository
-
-ADMIN_ROLES = frozenset({"ADMIN", "SUPER_ADMIN"})
 
 
 def get_bearer_token(request: Request) -> str:
@@ -80,28 +79,14 @@ def require_admin(
     current_user: TokenClaims = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008
 ) -> TokenClaims:
-    role_id_str = current_user.get("role_id")
-
-    if role_id_str is None or role_id_str == "":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Role information missing"
-        )
-
     try:
-        role_id = UUID(role_id_str)
-    except (ValueError, TypeError):
+        role = authorization.resolve_caller_role(db, current_user)
+    except AuthorizationException as e:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid role ID format"
+            status_code=status.HTTP_403_FORBIDDEN, detail=e.detail
         ) from None
 
-    role = role_repository.get_role_by_id(db, role_id)
-
-    if role is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Role not found"
-        )
-
-    if role.name not in ADMIN_ROLES:
+    if not authorization.is_admin_role(role):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
         )
@@ -117,23 +102,19 @@ def require_self_or_admin(
     if str(user_id) == current_user["sub"]:
         return current_user
 
-    role_id_str = current_user.get("role_id")
-
-    if role_id_str is None or role_id_str == "":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Role information missing"
-        )
-
     try:
-        role_id = UUID(role_id_str)
-    except (ValueError, TypeError):
+        role = authorization.resolve_caller_role(db, current_user)
+    except AuthorizationException as e:
+        if e.detail == "Role not found":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to update this user",
+            ) from None
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid role ID format"
+            status_code=status.HTTP_403_FORBIDDEN, detail=e.detail
         ) from None
 
-    role = role_repository.get_role_by_id(db, role_id)
-
-    if role is None or role.name != "ADMIN":
+    if role.name != authorization.ADMIN_ROLE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this user",

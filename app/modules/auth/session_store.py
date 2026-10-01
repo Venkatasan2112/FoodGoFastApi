@@ -20,8 +20,13 @@ def set_active_access_token(user_id: str, access_token: str) -> None:
             ttl = int(float(expiry) - now)
             if ttl > 0:
                 _ = redis_client.setex(f"auth:active:{user_id}", ttl, access_token)
-    except (redis.RedisError, JWTError) as e:
+    except JWTError as e:
+        logger.error(f"Failed to parse active token: {e}")
+    except redis.RedisError as e:
         logger.error(f"Failed to set active token in Redis: {e}")
+        raise ServiceUnavailableException(
+            "Authentication service temporarily unavailable"
+        ) from e
 
 
 def get_active_access_token(user_id: str) -> str | None:
@@ -32,7 +37,9 @@ def get_active_access_token(user_id: str) -> str | None:
         return str(token)
     except redis.RedisError as e:
         logger.error(f"Failed to get active token from Redis: {e}")
-        return None
+        raise ServiceUnavailableException(
+            "Authentication service temporarily unavailable"
+        ) from e
 
 
 def remove_active_access_token(user_id: str) -> None:
@@ -40,6 +47,9 @@ def remove_active_access_token(user_id: str) -> None:
         _ = redis_client.delete(f"auth:active:{user_id}")
     except redis.RedisError as e:
         logger.error(f"Failed to remove active token from Redis: {e}")
+        raise ServiceUnavailableException(
+            "Authentication service temporarily unavailable"
+        ) from e
 
 
 def is_blacklisted(token: str) -> bool:

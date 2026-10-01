@@ -16,6 +16,7 @@ from app.modules.auth.session_store import (
     remove_active_refresh_token,
 )
 from app.modules.users import repository as user_repository
+from app.modules.users.cache import delete_users_cache
 from app.modules.users.schema import UserCreate
 
 password_hash = PasswordHash.recommended()
@@ -47,6 +48,8 @@ def signup(
     except Exception:
         db.rollback()
         raise
+
+    delete_users_cache()
 
 
 def login(db: Session, email: str, password: str) -> tuple[str, str]:
