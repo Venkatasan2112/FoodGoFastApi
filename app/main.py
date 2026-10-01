@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.core import health
 from app.core.exception_handlers import (
     authentication_exception_handler,
     authorization_exception_handler,
@@ -33,6 +34,7 @@ app.add_exception_handler(
 app.add_exception_handler(Exception, unexpected_exception_handler)
 
 
+app.include_router(health.router)
 app.include_router(users.router)
 app.include_router(auth.router)
 
