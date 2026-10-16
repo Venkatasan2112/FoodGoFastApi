@@ -1,6 +1,8 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.core import health
+from app.core.config import settings
 from app.core.exception_handlers import (
     authentication_exception_handler,
     authorization_exception_handler,
@@ -22,6 +24,14 @@ from app.modules.auth import router as auth
 from app.modules.users import router as users
 
 app = FastAPI(title="FoodGo API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.add_exception_handler(AuthenticationException, authentication_exception_handler)  # type: ignore
 app.add_exception_handler(AuthorizationException, authorization_exception_handler)  # type: ignore
