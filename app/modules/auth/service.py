@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pwdlib import PasswordHash
 from sqlalchemy.orm import Session
 
@@ -23,14 +25,22 @@ password_hash = PasswordHash.recommended()
 
 
 def signup(
-    db: Session, user_data: SignupRequest, current_user: TokenClaims | None = None
+    db: Session,
+    user_data: SignupRequest,
+    current_user: TokenClaims | None = None,
+    role_id: UUID | None = None,
 ) -> None:
     existing_user = user_repository.get_user_by_email(db, user_data.email)
 
     if existing_user is not None:
         raise ConflictException("Email already registered")
 
-    role_id = authorization.resolve_signup_role(db, user_data.role_id, current_user)
+    target_role_id = (
+        role_id if role_id is not None else getattr(user_data, "role_id", None)
+    )
+    assigned_role_id = authorization.resolve_signup_role(
+        db, role_id=target_role_id, current_user=current_user
+    )
 
     hashed_password = password_hash.hash(user_data.password)
 
@@ -39,7 +49,7 @@ def signup(
         email=user_data.email,
         password=user_data.password,
         phone=user_data.phone,
-        role_id=role_id,
+        role_id=assigned_role_id,
     )
 
     try:

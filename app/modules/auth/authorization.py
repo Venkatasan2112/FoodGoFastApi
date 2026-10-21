@@ -35,8 +35,8 @@ def is_admin_role(role: Role) -> bool:
 
 def resolve_signup_role(
     db: Session,
-    role_id: UUID | None,
-    current_user: TokenClaims | None,
+    role_id: UUID | str | None = None,
+    current_user: TokenClaims | None = None,
 ) -> UUID:
     if role_id is None:
         role = role_repository.get_role_by_name(db, DEFAULT_SIGNUP_ROLE)
@@ -44,17 +44,22 @@ def resolve_signup_role(
             raise NotFoundException("Role not found")
         return role.id
 
+    if isinstance(role_id, str):
+        try:
+            role_id = UUID(role_id)
+        except (ValueError, TypeError):
+            raise NotFoundException("Requested role not found")
+
     requested_role = role_repository.get_role_by_id(db, role_id)
     if requested_role is None:
         raise NotFoundException("Requested role not found")
 
-    if requested_role.name != ADMIN_ROLE:
-        if current_user is None:
-            raise AuthorizationException("Role assignment requires admin access")
+    if current_user is None:
+        raise AuthorizationException("Role assignment requires admin access")
 
-        caller_role = resolve_caller_role(db, current_user)
+    caller_role = resolve_caller_role(db, current_user)
 
-        if not is_admin_role(caller_role):
-            raise AuthorizationException("Role assignment requires admin access")
+    if not is_admin_role(caller_role):
+        raise AuthorizationException("Role assignment requires admin access")
 
     return requested_role.id
