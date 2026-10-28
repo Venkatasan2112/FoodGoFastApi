@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import (
@@ -7,7 +8,6 @@ from app.core.exceptions import (
     NotFoundException,
     ValidationException,
 )
-from app.modules.auth import authorization
 from app.modules.auth.auth_types import TokenClaims
 from app.modules.menus import repository
 from app.modules.menus.model import Category, MenuItem
@@ -19,7 +19,10 @@ from app.modules.menus.schema import (
 )
 from app.modules.restaurants import repository as restaurant_repository
 from app.modules.restaurants.model import Restaurant
-from app.modules.restaurants.service import verify_restaurant_owner_or_admin
+from app.modules.restaurants.service import (
+    can_view_inactive_restaurant,
+    verify_restaurant_owner_or_admin,
+)
 
 
 def _get_restaurant_with_access(
@@ -36,15 +39,7 @@ def _get_restaurant_with_access(
 def _can_view_inactive_restaurant(
     db: Session, restaurant: Restaurant, current_user: TokenClaims | None
 ) -> bool:
-    if current_user is None:
-        return False
-
-    caller_role = authorization.resolve_caller_role(db, current_user)
-
-    if authorization.is_admin_role(caller_role):
-        return True
-
-    return str(restaurant.owner_id) == current_user["sub"]
+    return can_view_inactive_restaurant(db, restaurant, current_user)
 
 
 # ---------------- Category Management ----------------
@@ -67,6 +62,11 @@ def create_category(
     try:
         category = repository.create_category(db, restaurant_id, data)
         db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ConflictException(
+            "Category with this name already exists for this restaurant"
+        )
     except Exception:
         db.rollback()
         raise
@@ -153,6 +153,11 @@ def update_category(
     try:
         updated = repository.update_category(db, category, update_data)
         db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ConflictException(
+            "Category with this name already exists for this restaurant"
+        )
     except Exception:
         db.rollback()
         raise

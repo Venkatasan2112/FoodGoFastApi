@@ -28,7 +28,7 @@ def get_category_by_name(
     return db.scalars(
         select(Category).where(
             Category.restaurant_id == restaurant_id,
-            func.lower(Category.name) == name.lower(),
+            func.lower(Category.name) == name.strip().lower(),
         )
     ).first()
 

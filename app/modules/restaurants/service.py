@@ -99,6 +99,23 @@ def get_my_restaurants(
     return repository.get_restaurants(db, skip=skip, limit=limit, owner_id=owner_id)
 
 
+def can_view_inactive_restaurant(
+    db: Session, restaurant: Restaurant, current_user: TokenClaims | None
+) -> bool:
+    if current_user is None:
+        return False
+
+    caller_role = authorization.resolve_caller_role(db, current_user)
+
+    if authorization.is_admin_role(caller_role):
+        return True
+
+    return (
+        str(restaurant.owner_id) == current_user["sub"]
+        and authorization.can_manage_restaurants(caller_role)
+    )
+
+
 def get_restaurant_by_id(
     db: Session,
     restaurant_id: UUID,
@@ -111,19 +128,10 @@ def get_restaurant_by_id(
     if restaurant.is_active:
         return restaurant
 
-    # If inactive, only ADMIN or the restaurant owner can view it
-    if current_user is None:
+    if not can_view_inactive_restaurant(db, restaurant, current_user):
         raise NotFoundException("Restaurant not found")
 
-    caller_role = authorization.resolve_caller_role(db, current_user)
-
-    if authorization.is_admin_role(caller_role):
-        return restaurant
-
-    if str(restaurant.owner_id) == current_user["sub"]:
-        return restaurant
-
-    raise NotFoundException("Restaurant not found")
+    return restaurant
 
 
 def update_restaurant(

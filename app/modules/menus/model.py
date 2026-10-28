@@ -7,11 +7,12 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Numeric,
     String,
     Text,
-    UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -25,8 +26,11 @@ if TYPE_CHECKING:
 class Category(Base):
     __tablename__ = "categories"
     __table_args__ = (
-        UniqueConstraint(
-            "restaurant_id", "name", name="uq_categories_restaurant_id_name"
+        Index(
+            "uq_categories_restaurant_id_lower_name",
+            "restaurant_id",
+            func.lower(text("name")),
+            unique=True,
         ),
     )
 

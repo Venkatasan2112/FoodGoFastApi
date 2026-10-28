@@ -11,6 +11,8 @@ from app.modules.auth import authorization
 from app.modules.auth.auth_types import TokenClaims
 from app.modules.auth.cookie import REFRESH_COOKIE_NAME
 from app.modules.auth.session_store import is_blacklisted
+from app.modules.users import repository as user_repository
+from app.modules.users.cache import get_user_from_cache, set_user_cache
 
 
 def get_bearer_token(request: Request) -> str:
@@ -48,7 +50,10 @@ def get_optional_refresh_token(request: Request) -> str | None:
     return request.cookies.get(REFRESH_COOKIE_NAME)
 
 
-def get_current_user(request: Request) -> TokenClaims:
+def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db),  # noqa: B008
+) -> TokenClaims:
     token = get_bearer_token(request)
 
     if is_blacklisted(token):
@@ -64,15 +69,51 @@ def get_current_user(request: Request) -> TokenClaims:
             detail="Invalid or expired access token",
         )
 
+    user_id = str(claims["sub"])
+    cached_user = get_user_from_cache(user_id)
+    if cached_user is not None:
+        if not cached_user.get("is_active", True):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account is inactive",
+            )
+        claims["role_id"] = str(cached_user["role_id"])
+    else:
+        user = user_repository.get_user_by_id(db, user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+            )
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account is inactive",
+            )
+        claims["role_id"] = str(user.role_id)
+        set_user_cache(
+            {
+                "id": str(user.id),
+                "name": user.name,
+                "email": user.email,
+                "phone": user.phone,
+                "role_id": str(user.role_id),
+                "is_active": user.is_active,
+            }
+        )
+
     return cast(TokenClaims, claims)
 
 
-def get_optional_current_user(request: Request) -> TokenClaims | None:
+def get_optional_current_user(
+    request: Request,
+    db: Session = Depends(get_db),  # noqa: B008
+) -> TokenClaims | None:
     auth_header = request.headers.get("Authorization")
     if auth_header is None or auth_header == "":
         return None
 
-    return get_current_user(request)
+    return get_current_user(request, db=db)
 
 
 def require_admin(

@@ -6,6 +6,7 @@ from app.core.exceptions import AuthorizationException, NotFoundException
 from app.modules.auth.auth_types import TokenClaims
 from app.modules.roles import repository as role_repository
 from app.modules.roles.model import Role
+from app.modules.users import repository as user_repository
 
 DEFAULT_SIGNUP_ROLE = "USER"
 ADMIN_ROLE = "ADMIN"
@@ -15,6 +16,16 @@ ALLOWED_RESTAURANT_CREATOR_ROLES = ALLOWED_ADMIN_ROLES | RESTAURANT_OWNER_ROLES
 
 
 def resolve_caller_role(db: Session, current_user: TokenClaims) -> Role:
+    user_id_str = current_user.get("sub")
+    if user_id_str:
+        user = user_repository.get_user_by_id(db, user_id_str)
+        if user is not None:
+            if not user.is_active:
+                raise AuthorizationException("User account is inactive")
+            role = role_repository.get_role_by_id(db, user.role_id)
+            if role is not None:
+                return role
+
     role_id_str = current_user.get("role_id")
     if role_id_str is None or role_id_str == "":
         raise AuthorizationException("Role information missing")
