@@ -121,3 +121,23 @@ def require_self_or_admin(
         )
 
     return current_user
+
+
+def require_restaurant_creator(
+    current_user: TokenClaims = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
+) -> TokenClaims:
+    try:
+        role = authorization.resolve_caller_role(db, current_user)
+    except AuthorizationException as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=e.detail
+        ) from None
+
+    if not authorization.can_manage_restaurants(role):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Restaurant owner or admin access required",
+        )
+
+    return current_user

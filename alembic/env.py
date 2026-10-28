@@ -3,6 +3,8 @@ from logging.config import fileConfig
 from alembic import context
 from app.db.base import Base
 from app.db.session import engine
+from app.modules.menus.model import Category, MenuItem  # noqa
+from app.modules.restaurants.model import Restaurant  # noqa
 from app.modules.roles.model import Role  # noqa
 from app.modules.users.model import User  # noqa
 

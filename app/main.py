@@ -21,6 +21,8 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.modules.auth import router as auth
+from app.modules.menus import router as menus
+from app.modules.restaurants import router as restaurants
 from app.modules.users import router as users
 
 app = FastAPI(title="FoodGo API", version="1.0.0")
@@ -47,6 +49,8 @@ app.add_exception_handler(Exception, unexpected_exception_handler)
 app.include_router(health.router)
 app.include_router(users.router)
 app.include_router(auth.router)
+app.include_router(restaurants.router)
+app.include_router(menus.router)
 
 
 @app.get("/")

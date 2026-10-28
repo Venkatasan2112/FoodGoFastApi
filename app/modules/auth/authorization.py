@@ -10,6 +10,8 @@ from app.modules.roles.model import Role
 DEFAULT_SIGNUP_ROLE = "USER"
 ADMIN_ROLE = "ADMIN"
 ALLOWED_ADMIN_ROLES = frozenset({ADMIN_ROLE, "SUPER_ADMIN"})
+RESTAURANT_OWNER_ROLES = frozenset({"MANAGER", "RESTAURANT_OWNER", "OWNER"})
+ALLOWED_RESTAURANT_CREATOR_ROLES = ALLOWED_ADMIN_ROLES | RESTAURANT_OWNER_ROLES
 
 
 def resolve_caller_role(db: Session, current_user: TokenClaims) -> Role:
@@ -31,6 +33,14 @@ def resolve_caller_role(db: Session, current_user: TokenClaims) -> Role:
 
 def is_admin_role(role: Role) -> bool:
     return role.name in ALLOWED_ADMIN_ROLES
+
+
+def is_owner_role(role: Role) -> bool:
+    return role.name in RESTAURANT_OWNER_ROLES
+
+
+def can_manage_restaurants(role: Role) -> bool:
+    return role.name in ALLOWED_RESTAURANT_CREATOR_ROLES
 
 
 def resolve_signup_role(
